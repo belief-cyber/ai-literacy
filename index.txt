@@ -1,0 +1,725 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ChevronRight, ChevronLeft, CheckCircle, BarChart2, Settings, Users, FileText, Download, Menu, X, Save, RefreshCw, ExternalLink, Search, Filter } from 'lucide-react';
+
+// --- 초기 데이터 및 설정 ---
+
+// 4대 핵심 역량 정의
+const CATEGORIES = {
+  UNDERSTANDING: 'AI 이해',
+  UTILIZATION: 'AI 활용',
+  ETHICS: 'AI 윤리 및 평가',
+  CREATION: 'AI 창조'
+};
+
+// 가상의 한양대학교 전체 평균 데이터 (비교용)
+const UNIVERSITY_AVERAGE = {
+  [CATEGORIES.UNDERSTANDING]: 3.4,
+  [CATEGORIES.UTILIZATION]: 3.1,
+  [CATEGORIES.ETHICS]: 3.8,
+  [CATEGORIES.CREATION]: 2.9
+};
+const UNI_TOTAL_AVG = 3.3;
+
+// 가상의 사용자 데이터 (관리자 페이지용)
+const MOCK_USERS = [
+  { id: '2021001234', name: '김한양', college: '공과대학', dept: '컴퓨터소프트웨어학부', grade: 3, status: '재학', gender: '남', foreigner: false, score: 4.2, date: '2024-01-10' },
+  { id: '2022005678', name: '이미래', college: '경영대학', dept: '경영학부', grade: 2, status: '재학', gender: '여', foreigner: false, score: 3.8, date: '2024-01-11' },
+  { id: '2023009012', name: 'Zhang Wei', college: '국제학부', dept: '국제학과', grade: 1, status: '재학', gender: '남', foreigner: true, score: 2.9, date: '2024-01-12' },
+  { id: '2020003456', name: '박지성', college: '체육대학', dept: '스포츠산업학과', grade: 4, status: '휴학', gender: '남', foreigner: false, score: 3.5, date: '2023-12-28' },
+  { id: '2021007890', name: 'Emma Watson', college: '인문과학대학', dept: '영어영문학과', grade: 3, status: '재학', gender: '여', foreigner: true, score: 4.5, date: '2024-01-09' },
+  { id: '2024001122', name: '최수현', college: '사회과학대학', dept: '미디어커뮤니케이션학과', grade: 1, status: '재학', gender: '여', foreigner: false, score: 3.2, date: '2024-01-12' },
+  { id: '2019003344', name: '정우성', college: '공과대학', dept: '기계공학부', grade: 4, status: '재학', gender: '남', foreigner: false, score: 4.0, date: '2024-01-05' },
+];
+
+// 샘플 문항 데이터 (가중치 포함)
+const INITIAL_QUESTIONS = [
+  // AI 이해 (4문항)
+  { id: 1, category: CATEGORIES.UNDERSTANDING, text: "나는 주요 AI 개념(머신러닝, 대규모 언어모델(LLM), 신경망, 강화학습 등)과 기본 작동 원리를 이해하고 있다.", weight: 1.3 },
+  { id: 2, category: CATEGORIES.UNDERSTANDING, text: "나는 AI가 해결하기에 적합한 문제와 어려운 문제를 구분할 수 있다.", weight: 1.0 },
+  { id: 3, category: CATEGORIES.UNDERSTANDING, text: "나는 오픈소스 AI와 폐쇄형 AI의 차이에 대한 기본적인 이해가 있다.", weight: 1.2 },
+  { id: 4, category: CATEGORIES.UNDERSTANDING, text: "나는 내가 사용하는 AI 도구의 입력 및 출력 형태(텍스트, 이미지 등)를 이해하고 있다.", weight: 1.0 },
+  
+  // AI 활용 (3문항)
+  { id: 5, category: CATEGORIES.UTILIZATION, text: "나는 학업·연구 목적에 맞는 AI 도구를 스스로 선택하고 활용할 수 있다. (예: PPT 제작, 레포트 작성)", weight: 1.2 },
+  { id: 6, category: CATEGORIES.UTILIZATION, text: "나는 AI에게 효과적인 명령어나 질문을 제시하여 대체로 원하는 결과를 얻어낸다.", weight: 1.3 },
+  { id: 7, category: CATEGORIES.UTILIZATION, text: "나는 효과적인 결과를 얻기 위해 프롬프트 작성 전략(맥락 제공, 대안 요청 등)을 의식적으로 활용하고 있다.", weight: 1.4 },
+  
+  // AI 윤리 및 평가 (5문항)
+  { id: 8, category: CATEGORIES.ETHICS, text: "나는 AI 결과물에서 사실이 아닌 내용(환각, hallucination)을 구별할 수 있다.", weight: 1.3 },
+  { id: 9, category: CATEGORIES.ETHICS, text: "나는 AI 활용이 학문 연구에서 저작권·개인정보 보호 문제와 어떤 관련이 있는지 설명할 수 있다.", weight: 1.0 },
+  { id: 10, category: CATEGORIES.ETHICS, text: "나는 AI가 노동시장, 환경 등 사회 전반에 미치는 영향을 설명할 수 있다.", weight: 1.2 },
+  { id: 11, category: CATEGORIES.ETHICS, text: "나는 AI가 편향된 결과를 생성하거나 허위정보를 확산시킬 수 있음을 비판적으로 논의할 수 있다.", weight: 1.4 },
+  { id: 12, category: CATEGORIES.ETHICS, text: "나는 AI를 활용할 때 저작권, 출처, 개인정보 등 윤리적 문제를 스스로 확인하는 습관이 있다.", weight: 1.3 },
+  
+  // AI 창조 (3문항)
+  { id: 13, category: CATEGORIES.CREATION, text: "나는 AI를 활용한 간단한 프로젝트 아이디어(예: 맞춤형 학습 도우미, 연구 자동화 도구)를 구상할 수 있다.", weight: 1.2 },
+  { id: 14, category: CATEGORIES.CREATION, text: "나는 API를 활용해 학습·연구에 필요한 간단한 AI 기능을 구현할 수 있다.", weight: 1.4 },
+  { id: 15, category: CATEGORIES.CREATION, text: "나는 AI의 특정 기능(예: 텍스트 요약, 이미지 분석)을 조합하여 새로운 아이디어를 제안할 수 있다.", weight: 1.3 },
+];
+
+// 척도 정의
+const SCALE = [
+  { value: 1, label: "전혀 아니다" },
+  { value: 2, label: "그렇지 않다" },
+  { value: 3, label: "보통이다" },
+  { value: 4, label: "그렇다" },
+  { value: 5, label: "매우 그렇다" }
+];
+
+// 12개 유형 예시 (간소화된 로직용)
+const DIAGNOSIS_TYPES = {
+  BEGINNER: { title: "AI 새싹형", desc: "AI에 대한 기초적인 이해가 시작되었습니다. 다양한 도구를 체험해보세요." },
+  ETHICAL_USER: { title: "윤리적 AI 활용가", desc: "윤리 의식이 높고 활용 능력이 균형 잡혀 있습니다." },
+  CREATOR: { title: "AI 창작 전문가", desc: "AI를 도구로 활용하여 새로운 가치를 창출하는 능력이 뛰어납니다." },
+  MASTER: { title: "AI 마스터", desc: "모든 영역에서 탁월한 역량을 보유하고 있습니다." },
+};
+
+// --- 메인 컴포넌트 ---
+
+export default function App() {
+  const [view, setView] = useState('intro'); // intro, test, result, admin
+  const [questions, setQuestions] = useState(INITIAL_QUESTIONS);
+  const [answers, setAnswers] = useState({}); // { questionId: score }
+  const [resultData, setResultData] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // --- 진단 로직 ---
+
+  const calculateResult = () => {
+    const scores = {
+      [CATEGORIES.UNDERSTANDING]: { sum: 0, weightSum: 0 },
+      [CATEGORIES.UTILIZATION]: { sum: 0, weightSum: 0 },
+      [CATEGORIES.ETHICS]: { sum: 0, weightSum: 0 },
+      [CATEGORIES.CREATION]: { sum: 0, weightSum: 0 },
+    };
+
+    questions.forEach(q => {
+      const score = answers[q.id] || 0;
+      if (scores[q.category]) {
+        scores[q.category].sum += score * q.weight;
+        scores[q.category].weightSum += q.weight;
+      }
+    });
+
+    // 가중 평균 산출
+    const finalScores = {};
+    let totalScore = 0;
+    
+    Object.keys(scores).forEach(cat => {
+      const { sum, weightSum } = scores[cat];
+      const avg = weightSum > 0 ? (sum / weightSum) : 0;
+      finalScores[cat] = parseFloat(avg.toFixed(2));
+      totalScore += avg;
+    });
+
+    const totalAverage = totalScore / 4;
+
+    // 수준 판별
+    const getLevel = (score) => {
+      if (score >= 4.0) return "고급";
+      if (score >= 3.0) return "중급";
+      return "초급";
+    };
+
+    // 유형 판별
+    let type = DIAGNOSIS_TYPES.BEGINNER;
+    if (totalAverage >= 4.2) type = DIAGNOSIS_TYPES.MASTER;
+    else if (finalScores[CATEGORIES.CREATION] >= 4.0) type = DIAGNOSIS_TYPES.CREATOR;
+    else if (finalScores[CATEGORIES.ETHICS] >= 4.0) type = DIAGNOSIS_TYPES.ETHICAL_USER;
+
+    // 차트 데이터 구성 (내 점수 + 학교 평균)
+    const radarData = Object.keys(finalScores).map(key => ({
+      subject: key,
+      A: finalScores[key],         // 내 점수
+      B: UNIVERSITY_AVERAGE[key], // 학교 평균
+      fullMark: 5,
+    }));
+
+    return {
+      scores: finalScores,
+      totalAverage: totalAverage.toFixed(2),
+      levels: {
+        [CATEGORIES.UNDERSTANDING]: getLevel(finalScores[CATEGORIES.UNDERSTANDING]),
+        [CATEGORIES.UTILIZATION]: getLevel(finalScores[CATEGORIES.UTILIZATION]),
+        [CATEGORIES.ETHICS]: getLevel(finalScores[CATEGORIES.ETHICS]),
+        [CATEGORIES.CREATION]: getLevel(finalScores[CATEGORIES.CREATION]),
+      },
+      type: type,
+      radarData: radarData
+    };
+  };
+
+  const handleFinishTest = () => {
+    const result = calculateResult();
+    setResultData(result);
+    setView('result');
+    window.scrollTo(0, 0);
+  };
+
+  // --- 화면 렌더링 ---
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-100">
+      {/* 헤더 */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('intro')}>
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">AI</div>
+            <span className="font-bold text-lg tracking-tight">AI 역량 진단 시스템</span>
+          </div>
+          <div className="flex gap-2">
+             {!isAdmin && (
+                <button 
+                  onClick={() => { setIsAdmin(true); setView('admin'); }}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  관리자 모드
+                </button>
+             )}
+             {isAdmin && (
+               <button 
+                 onClick={() => { setIsAdmin(false); setView('intro'); }}
+                 className="px-3 py-1 bg-slate-800 text-white text-xs rounded hover:bg-slate-700 transition-colors"
+               >
+                 학생 모드로 전환
+               </button>
+             )}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        {view === 'intro' && <IntroView onStart={() => setView('test')} />}
+        {view === 'test' && (
+          <TestView 
+            questions={questions} 
+            answers={answers} 
+            setAnswers={setAnswers} 
+            onFinish={handleFinishTest} 
+          />
+        )}
+        {view === 'result' && resultData && (
+          <ResultView 
+            data={resultData} 
+            onRetry={() => {
+              setAnswers({});
+              setView('intro');
+            }} 
+          />
+        )}
+        {view === 'admin' && isAdmin && (
+          <AdminView questions={questions} setQuestions={setQuestions} />
+        )}
+      </main>
+
+      <footer className="mt-12 py-8 border-t border-slate-200 bg-white text-center text-slate-500 text-sm">
+        <p>© 2024 AI Competency Diagnosis System. All rights reserved.</p>
+      </footer>
+    </div>
+  );
+}
+
+// --- 하위 컴포넌트: 소개 화면 ---
+
+function IntroView({ onStart }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 animate-fade-in">
+      <div className="bg-blue-50 p-4 rounded-full mb-6">
+        <BarChart2 className="w-12 h-12 text-blue-600" />
+      </div>
+      <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 text-center">
+        나의 AI 역량은 어느 수준일까요?
+      </h1>
+      <p className="text-lg text-slate-600 max-w-2xl text-center mb-8 leading-relaxed">
+        본 진단은 AI 시대를 살아가기 위해 필요한 <strong>4대 핵심 역량</strong>을 분석해드립니다.<br className="hidden md:block"/>
+        약 5분 소요되며, 응답 결과에 따라 맞춤형 학습 가이드와 리포트가 제공됩니다.
+      </p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full mb-12">
+        {Object.values(CATEGORIES).map((cat, idx) => (
+          <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
+            <div className={`w-2 h-2 rounded-full mb-3 ${idx === 0 ? 'bg-blue-500' : idx === 1 ? 'bg-green-500' : idx === 2 ? 'bg-purple-500' : 'bg-orange-500'}`}></div>
+            <span className="font-semibold text-slate-700">{cat}</span>
+          </div>
+        ))}
+      </div>
+
+      <button 
+        onClick={onStart}
+        className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-white transition-all duration-200 bg-blue-600 font-lg rounded-full hover:bg-blue-700 hover:shadow-lg hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
+      >
+        진단 시작하기
+        <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+      </button>
+    </div>
+  );
+}
+
+// --- 하위 컴포넌트: 진단 화면 (Progressive Form) ---
+
+function TestView({ questions, answers, setAnswers, onFinish }) {
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(questions.length / itemsPerPage);
+  
+  const currentQuestions = questions.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
+  
+  // 진행률 계산
+  const answeredCount = Object.keys(answers).length;
+  const progress = (answeredCount / questions.length) * 100;
+
+  const handleAnswer = (qid, value) => {
+    setAnswers(prev => ({ ...prev, [qid]: value }));
+  };
+
+  const canProceed = currentQuestions.every(q => answers[q.id] !== undefined);
+
+  const handleNext = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(prev => prev + 1);
+      window.scrollTo(0, 0);
+    } else {
+      onFinish();
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      {/* 진행 상태 바 */}
+      <div className="mb-8">
+        <div className="flex justify-between text-sm text-slate-500 mb-2">
+          <span>진행률</span>
+          <span>{Math.round(progress)}%</span>
+        </div>
+        <div className="w-full bg-slate-200 rounded-full h-2.5">
+          <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
+        </div>
+      </div>
+
+      {/* 문항 리스트 */}
+      <div className="space-y-8 mb-10">
+        {currentQuestions.map((q, idx) => (
+          <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 animate-fade-in-up" style={{ animationDelay: `${idx * 100}ms` }}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-slate-400 text-xs font-medium">문항 {q.id}</span>
+            </div>
+            <h3 className="text-lg font-medium text-slate-800 mb-6 leading-snug">
+              {q.text}
+            </h3>
+            
+            <div className="grid grid-cols-5 gap-2">
+              {SCALE.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => handleAnswer(q.id, s.value)}
+                  className={`flex flex-col items-center justify-center py-3 rounded-lg border transition-all duration-200 
+                    ${answers[q.id] === s.value 
+                      ? 'bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-200' 
+                      : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                >
+                  <span className={`text-lg font-bold mb-1 ${answers[q.id] === s.value ? 'text-blue-600' : 'text-slate-300'}`}>{s.value}</span>
+                  <span className="text-[10px] hidden sm:block">{s.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between text-xs text-slate-400 mt-2 px-1">
+              <span>전혀 아니다</span>
+              <span>매우 그렇다</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 네비게이션 */}
+      <div className="flex justify-between mt-8">
+        <button 
+          onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+          disabled={currentPage === 0}
+          className="px-6 py-3 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors font-medium flex items-center"
+        >
+          <ChevronLeft className="w-4 h-4 mr-2" />
+          이전
+        </button>
+        <button 
+          onClick={handleNext}
+          disabled={!canProceed}
+          className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors font-bold shadow-md hover:shadow-lg flex items-center"
+        >
+          {currentPage === totalPages - 1 ? '결과 확인하기' : '다음'}
+          {currentPage !== totalPages - 1 && <ChevronRight className="w-4 h-4 ml-2" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- 하위 컴포넌트: 결과 화면 ---
+
+function ResultView({ data, onRetry }) {
+  // 가장 점수가 낮은(부족한) 역량 찾기
+  const weakestCategory = useMemo(() => {
+    const sorted = Object.entries(data.scores).sort((a, b) => a[1] - b[1]);
+    return sorted[0][0]; // 점수 오름차순 정렬의 첫 번째 키
+  }, [data.scores]);
+
+  // 비교 점수 계산
+  const diffFromAvg = (parseFloat(data.totalAverage) - UNI_TOTAL_AVG).toFixed(2);
+  const diffText = diffFromAvg >= 0 ? `+${diffFromAvg}` : diffFromAvg;
+
+  // 비교과 프로그램 추천 URL 반환 함수
+  const getRecommendationUrl = (category) => {
+    return 'https://hylu-e.hanyang.ac.kr/';
+  };
+
+  return (
+    <div className="animate-fade-in">
+      <div className="text-center mb-10">
+        <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-bold mb-3">진단 완료</span>
+        <h2 className="text-3xl font-bold text-slate-900 mb-2">당신의 AI 역량 유형은</h2>
+        <h1 className="text-4xl md:text-5xl font-extrabold text-blue-600 mb-4">{data.type.title}</h1>
+        <p className="text-slate-600 max-w-2xl mx-auto">{data.type.desc}</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        {/* 레이더 차트 (비교 기능 추가) */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center min-h-[400px]">
+          <h3 className="text-lg font-bold text-slate-800 mb-4 self-start flex items-center justify-between w-full">
+            <span className="flex items-center"><BarChart2 className="w-5 h-5 mr-2 text-blue-500" /> 역량 프로필 비교</span>
+            <div className="flex gap-3 text-xs font-medium">
+                <span className="flex items-center"><span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>나</span>
+                <span className="flex items-center"><span className="w-2 h-2 rounded-full bg-slate-300 mr-1"></span>학교 평균</span>
+            </div>
+          </h3>
+          <div className="w-full h-[350px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="75%" data={data.radarData}>
+                <PolarGrid stroke="#e2e8f0" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 12 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 5]} tick={false} axisLine={false} />
+                {/* 학교 평균 (배경) */}
+                <Radar name="학교 전체 평균" dataKey="B" stroke="#cbd5e1" fill="#cbd5e1" fillOpacity={0.4} />
+                {/* 내 점수 (전경) */}
+                <Radar name="나의 점수" dataKey="A" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.6} />
+                <Tooltip />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* 상세 점수 및 수준 */}
+        <div className="space-y-4">
+           {/* 종합 점수 카드 (평균 비교 추가) */}
+           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                    <p className="text-blue-100 text-sm font-medium mb-1">나의 종합 점수</p>
+                    <div className="text-4xl font-bold">{data.totalAverage} <span className="text-lg font-normal text-blue-200">/ 5.0</span></div>
+                </div>
+                <div className="text-right">
+                    <p className="text-blue-100 text-sm font-medium mb-1">학교 전체 평균</p>
+                    <div className="text-2xl font-bold text-blue-200">{UNI_TOTAL_AVG}</div>
+                </div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-3 text-sm flex items-center justify-between">
+                <span>평균 대비</span>
+                <span className={`font-bold ${diffFromAvg >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                    {diffFromAvg >= 0 ? '▲' : '▼'} {diffText}점 {diffFromAvg >= 0 ? '높음' : '낮음'}
+                </span>
+              </div>
+           </div>
+
+           {/* 역량별 카드 */}
+           <div className="grid grid-cols-1 gap-3">
+             {Object.keys(data.scores).map((cat, idx) => (
+               <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                 <div>
+                   <h4 className="font-bold text-slate-700">{cat}</h4>
+                   <p className="text-xs text-slate-400 mt-1">
+                     학교 평균: {UNIVERSITY_AVERAGE[cat]}
+                   </p>
+                 </div>
+                 <div className="text-right">
+                   <div className="font-bold text-xl text-slate-800">{data.scores[cat]}</div>
+                   <span className={`text-xs px-2 py-0.5 rounded font-medium 
+                     ${data.levels[cat] === '고급' ? 'bg-blue-100 text-blue-700' : 
+                       data.levels[cat] === '중급' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                     {data.levels[cat]}
+                   </span>
+                 </div>
+               </div>
+             ))}
+           </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-100 p-8 rounded-2xl mb-12">
+        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+          <FileText className="w-5 h-5 mr-2 text-slate-600" />
+          상세 피드백 가이드
+        </h3>
+        <div className="prose prose-slate max-w-none">
+          <p className="mb-4">
+            귀하는 <strong>{data.type.title}</strong>에 해당합니다. 전반적으로 <strong>{Object.entries(data.scores).sort((a,b) => b[1] - a[1])[0][0]}</strong> 역량이 가장 뛰어납니다.
+          </p>
+          <ul className="list-disc pl-5 space-y-2 text-slate-700">
+            <li><strong>강점 강화:</strong> 가장 높은 점수를 받은 영역을 활용하여 실제 프로젝트를 주도해보세요.</li>
+            <li><strong>약점 보완:</strong> 상대적으로 점수가 낮은 <strong>{weakestCategory}</strong> 역량 보완을 위해 관련 비교과 프로그램 참여를 추천합니다.</li>
+            <li><strong>추천 활동:</strong> AI 관련 해커톤 참여, 생성형 AI를 활용한 블로그 포스팅 작성.</li>
+          </ul>
+        </div>
+        
+        {/* 요청하신 부족 역량 보완 프로그램 추천 버튼 */}
+        <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center">
+            <p className="text-slate-600 mb-4 text-sm text-center">
+                나의 부족한 역량인 <span className="text-blue-600 font-bold underline">{weakestCategory}</span> 능력을 키우고 싶다면?
+            </p>
+            <button
+                onClick={() => window.open(getRecommendationUrl(weakestCategory), '_blank')}
+                className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+            >
+                <ExternalLink className="w-5 h-5" />
+                부족 역량 보완 프로그램 추천받기 (HY-LU)
+            </button>
+        </div>
+      </div>
+
+      <div className="flex justify-center gap-4">
+        <button 
+          onClick={onRetry}
+          className="px-6 py-3 border border-slate-300 rounded-lg text-slate-600 font-medium hover:bg-slate-50 transition-colors flex items-center"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          다시 진단하기
+        </button>
+        <button className="px-6 py-3 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors flex items-center">
+          <Download className="w-4 h-4 mr-2" />
+          결과 PDF 저장
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- 하위 컴포넌트: 관리자 화면 ---
+
+function AdminView({ questions, setQuestions }) {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // 가상의 통계 데이터
+  const mockStats = [
+    { name: 'AI 이해', score: 3.2 },
+    { name: 'AI 활용', score: 3.8 },
+    { name: 'AI 윤리', score: 2.9 },
+    { name: 'AI 창조', score: 2.5 },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl shadow-lg border border-slate-200 min-h-[600px] flex flex-col md:flex-row overflow-hidden">
+      {/* 사이드바 */}
+      <aside className="w-full md:w-64 bg-slate-800 text-slate-300 flex flex-col">
+        <div className="p-6 border-b border-slate-700">
+          <h2 className="text-white font-bold text-lg flex items-center">
+            <Settings className="w-5 h-5 mr-2" />
+            관리자 시스템
+          </h2>
+        </div>
+        <nav className="flex-1 p-4 space-y-2">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`w-full text-left px-4 py-3 rounded-lg flex items-center transition-colors ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'hover:bg-slate-700'}`}
+          >
+            <BarChart2 className="w-4 h-4 mr-3" />
+            통계 대시보드
+          </button>
+          <button 
+            onClick={() => setActiveTab('users')}
+            className={`w-full text-left px-4 py-3 rounded-lg flex items-center transition-colors ${activeTab === 'users' ? 'bg-blue-600 text-white' : 'hover:bg-slate-700'}`}
+          >
+            <Users className="w-4 h-4 mr-3" />
+            사용자(학생) 관리
+          </button>
+          <button 
+            onClick={() => setActiveTab('questions')}
+            className={`w-full text-left px-4 py-3 rounded-lg flex items-center transition-colors ${activeTab === 'questions' ? 'bg-blue-600 text-white' : 'hover:bg-slate-700'}`}
+          >
+            <FileText className="w-4 h-4 mr-3" />
+            진단 문항 관리
+          </button>
+        </nav>
+      </aside>
+
+      {/* 메인 컨텐츠 */}
+      <div className="flex-1 p-8 bg-slate-50 overflow-y-auto max-h-[800px]">
+        {activeTab === 'dashboard' && (
+          <div className="animate-fade-in">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">진단 현황 대시보드</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-slate-500 text-sm mb-1">총 누적 참여자</p>
+                <p className="text-3xl font-bold text-slate-800">1,248명</p>
+                <p className="text-green-500 text-xs mt-2 flex items-center">↑ 전주 대비 12% 증가</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-slate-500 text-sm mb-1">오늘 참여자</p>
+                <p className="text-3xl font-bold text-slate-800">42명</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <p className="text-slate-500 text-sm mb-1">평균 소요 시간</p>
+                <p className="text-3xl font-bold text-slate-800">4분 30초</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+              <h3 className="font-bold text-slate-700 mb-4">전체 학생 역량별 평균 점수</h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={mockStats}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis domain={[0, 5]} />
+                    <Tooltip />
+                    <Bar dataKey="score" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+                <button className="flex items-center text-sm text-blue-600 hover:underline">
+                    <Download className="w-4 h-4 mr-1" />
+                    전체 데이터 엑셀 다운로드 (.xlsx)
+                </button>
+            </div>
+          </div>
+        )}
+
+        {/* 사용자 관리 탭 구현 */}
+        {activeTab === 'users' && (
+          <div className="animate-fade-in">
+             <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-800">사용자(학생) 데이터 관리</h2>
+              <div className="flex gap-2">
+                 <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input 
+                      type="text" 
+                      placeholder="이름 또는 학번 검색" 
+                      className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                 </div>
+                 <button className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-600 text-sm hover:bg-slate-50 flex items-center">
+                    <Filter className="w-4 h-4 mr-2" />
+                    필터
+                 </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-slate-600">
+                        <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th className="px-6 py-3">이름</th>
+                                <th className="px-6 py-3">학번</th>
+                                <th className="px-6 py-3">단과대학/학과</th>
+                                <th className="px-6 py-3">학년</th>
+                                <th className="px-6 py-3">상태</th>
+                                <th className="px-6 py-3">특성</th>
+                                <th className="px-6 py-3">최근 진단일</th>
+                                <th className="px-6 py-3">점수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {MOCK_USERS.filter(u => u.name.includes(searchTerm) || u.id.includes(searchTerm)).map((user, idx) => (
+                                <tr key={idx} className="bg-white border-b hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-slate-900">{user.name}</td>
+                                    <td className="px-6 py-4">{user.id}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-medium text-slate-800">{user.college}</div>
+                                        <div className="text-xs text-slate-500">{user.dept}</div>
+                                    </td>
+                                    <td className="px-6 py-4">{user.grade}학년</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${user.status === '재학' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                            {user.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 space-y-1">
+                                        <div className="text-xs flex items-center gap-1">
+                                            <span className="text-slate-400">성별:</span> {user.gender}
+                                        </div>
+                                        {user.foreigner && (
+                                            <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-bold">
+                                                외국인 유학생
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">{user.date}</td>
+                                    <td className="px-6 py-4 font-bold text-blue-600">{user.score}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="p-4 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-500">
+                    * 실제 운영 시 학교 DB와 연동하여 자동으로 데이터를 불러옵니다.
+                </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'questions' && (
+          <div className="animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-800">진단 문항 관리</h2>
+              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700">
+                + 새 문항 추가
+              </button>
+            </div>
+            <div className="space-y-4">
+              {questions.map((q, idx) => (
+                <div key={q.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 group">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">No. {idx + 1}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold 
+                            ${q.category === CATEGORIES.UNDERSTANDING ? 'bg-blue-50 text-blue-600' :
+                              q.category === CATEGORIES.UTILIZATION ? 'bg-green-50 text-green-600' :
+                              q.category === CATEGORIES.ETHICS ? 'bg-purple-50 text-purple-600' : 'bg-orange-50 text-orange-600'}`}>
+                            {q.category}
+                        </span>
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button className="text-slate-400 hover:text-blue-600"><Settings className="w-4 h-4" /></button>
+                        <button className="text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={q.text}
+                    readOnly
+                    className="w-full text-slate-800 font-medium focus:outline-none focus:bg-slate-50 rounded p-1"
+                  />
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded">
+                        <span>가중치(Weight):</span>
+                        <span className="font-bold text-slate-700">{q.weight}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <span>수정일: 2024.01.15</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
